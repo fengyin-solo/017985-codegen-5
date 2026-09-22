@@ -1,0 +1,29 @@
+# 依赖（仅在容器构建阶段重新安装，避免宿主 node_modules 进入构建上下文/缓存失效）
+node_modules/
+
+# 构建产物与缓存
+dist/
+dist-offline/
+release/
+.vite/
+*.tsbuildinfo
+
+# 日志与临时文件
+npm-debug.log*
+*.log
+*.tmp
+
+# 编辑器/系统文件
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker 自身文件（Dockerfile 无需复制进镜像）
+Dockerfile*
+.dockerignore

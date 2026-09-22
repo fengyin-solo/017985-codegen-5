@@ -21,6 +21,59 @@ docker-compose down
 |---------|------|------|
 | frontend-user | 8081 | 古琴音频分析软件用户端 |
 
+## 离线单文件分发版（推荐给不能连网的斫琴师）
+
+离线版本在**构建阶段**把全部 JavaScript、CSS（含 Chart.js）内联进**唯一一个**
+`index.html`；运行阶段只有这一个静态文件，**无需安装任何软件、无需联网**，
+拷到 U 盘里双击即可用浏览器打开。
+
+### 制作离线包（需要在有网络的机器上执行一次）
+
+依赖版本全部固定（精确版本 + `package-lock.json` 完整性校验），构建可复现：
+
+```bash
+cd frontend-user
+npm ci              # 严格按 lockfile 安装，仅构建时需要
+npm run package:offline
+```
+
+产物：
+
+- `frontend-user/dist-offline/index.html` —— 自包含单文件，可直接双击打开
+- `frontend-user/release/guqin-audio-analyzer-offline-<版本号>.zip` —— 分发包
+  （内含 `index.html` 和 `README.txt`，由 Node 内置库零依赖打包）
+
+构建脚本会校验产物：必须只有一个 `index.html`、无任何外部（http/相对文件）
+资源引用、JS/CSS 均已内联；校验不通过或构建出错时会打印**明确的失败原因**
+并以非零状态退出。
+
+### 分发给离线用户
+
+把 zip 拷贝到离线电脑（U 盘均可），解压后双击 `index.html`，
+用 Chrome / Edge / Firefox / Safari 打开即可。所有音频分析都在本机浏览器内完成。
+
+### 用容器运行离线版（端口与入口不变）
+
+离线镜像为多阶段构建：构建阶段用固定版本的 Node 镜像产出单文件；
+运行阶段基于 `nginx:1.27-alpine`，镜像内**只有静态 index.html**，
+不含 Node、`node_modules`、构建缓存或开发依赖：
+
+```bash
+docker compose -f docker-compose.offline.yml up --build -d
+```
+
+访问入口与本地开发、在线版容器完全一致：**http://localhost:8081**
+（8081 端口同一时间只能启动一个版本，离线版与在线版二选一即可）。
+
+离线镜像也可导出后搬到无网机器加载：
+
+```bash
+docker compose -f docker-compose.offline.yml build
+docker save guqin-audio-analyzer-offline:1.0.0 | gzip > offline-image.tar.gz
+# 拷贝到离线机器后：
+docker load < offline-image.tar.gz && docker compose -f docker-compose.offline.yml up -d
+```
+
 ## 测试
 
 ### 测试音频
@@ -102,11 +155,18 @@ docker-compose down
 │   │   │   └── main.css    # 主样式
 │   │   └── main.js         # 入口文件
 │   ├── index.html          # HTML 模板
-│   ├── Dockerfile          # Docker 构建文件
-│   ├── nginx.conf          # Nginx 配置
-│   ├── package.json        # 项目配置
-│   └── vite.config.js      # Vite 配置
-├── docker-compose.yml      # Docker Compose 配置
+│   ├── Dockerfile          # 在线版 Docker 构建文件
+│   ├── Dockerfile.offline  # 离线单文件版 Docker 构建（运行层仅静态文件）
+│   ├── nginx.conf          # 在线版 Nginx 配置
+│   ├── nginx-offline.conf  # 离线版 Nginx 配置（同样监听 8081）
+│   ├── package.json        # 项目配置（依赖版本全部固定）
+│   ├── vite.config.js      # Vite 配置（本地开发 / 普通构建）
+│   ├── vite.config.offline.js  # 离线单文件构建配置（资源全部内联）
+│   └── scripts/            # 离线构建与打包脚本
+│       ├── build-offline.mjs    # 构建 + 产物校验，失败给出明确原因
+│       └── package-offline.mjs  # 零依赖生成可分发 zip
+├── docker-compose.yml          # 在线版 Docker Compose
+├── docker-compose.offline.yml  # 离线版 Docker Compose（同为 8081 端口）
 ├── .gitignore              # Git 忽略文件
 └── README.md               # 项目说明
 ```

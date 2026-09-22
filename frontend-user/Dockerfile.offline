@@ -1,0 +1,48 @@
+# syntax=docker/dockerfile:1
+
+# ========== 构建阶段：仅在构建时存在，产出离线单文件 index.html ==========
+# 固定基础镜像到明确的主次版本，保证可复现构建
+FROM --platform=$BUILDPLATFORM node:20.20-alpine3.21 AS builder
+
+WORKDIR /app
+
+# 先复制依赖清单，利用 Docker 层缓存
+# package-lock.json 中已固定全部依赖的精确版本与完整性校验值
+COPY package.json package-lock.json ./
+
+# npm ci 严格按 lockfile 安装（不会更新版本）；包含构建所需的 devDependencies
+RUN npm ci --no-audit --no-fund
+
+# 复制源代码与构建脚本
+COPY index.html vite.config.offline.js ./
+COPY src ./src
+COPY scripts ./scripts
+
+# 构建离线单文件；脚本内置产物校验，失败时构建直接失败并输出明确原因
+RUN npm run build:offline
+
+# 构建产物校验：最终镜像中只能有一个 index.html，不允许夹带任何其它文件
+RUN set -eu; \
+    count=$(find /app/dist-offline -type f | wc -l); \
+    if [ "$count" -ne 1 ] || [ ! -f /app/dist-offline/index.html ]; then \
+      echo "ERROR: 离线产物必须仅包含 index.html 一个文件，实际文件数: $count" >&2; \
+      find /app/dist-offline -type f >&2; \
+      exit 1; \
+    fi
+
+# ========== 运行阶段：只提供静态文件，不安装任何依赖 ==========
+# nginx-alpine 不含 Node、不含 node_modules，运行时零应用依赖
+FROM --platform=$TARGETPLATFORM nginx:1.27-alpine3.21
+
+# 移除镜像默认页面，只保留我们的离线静态包
+RUN rm -rf /usr/share/nginx/html/*
+
+# 离线专用 nginx 配置（监听 8081，与本地开发、docker-compose 保持一致）
+COPY nginx-offline.conf /etc/nginx/conf.d/default.conf
+
+# 只复制构建阶段产出的静态文件（不复制 node_modules / 构建缓存 / 源代码）
+COPY --from=builder /app/dist-offline/index.html /usr/share/nginx/html/index.html
+
+EXPOSE 8081
+
+CMD ["nginx", "-g", "daemon off;"]

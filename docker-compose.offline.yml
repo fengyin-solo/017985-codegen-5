@@ -1,0 +1,24 @@
+# 离线单文件分发版本
+# 与本地开发（npm run dev）使用相同端口和入口：http://localhost:8081
+# 运行镜像内只有一个静态 index.html（由 Nginx 提供），不含 Node、node_modules 或任何运行时依赖
+#
+# 注意：与 docker-compose.yml（在线版）占用同一主机端口 8081，二者启动其一即可。
+services:
+  frontend-user-offline:
+    build:
+      context: ./frontend-user
+      dockerfile: Dockerfile.offline
+      platforms:
+        - linux/amd64
+        - linux/arm64
+    image: guqin-audio-analyzer-offline:1.0.0
+    container_name: guqin-audio-analyzer-offline
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

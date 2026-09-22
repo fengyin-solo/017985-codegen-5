@@ -5,6 +5,8 @@ node_modules/
 
 # 构建输出
 dist/
+dist-offline/
+release/
 build/
 .next/
 out/
