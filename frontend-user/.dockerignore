@@ -1,0 +1,16 @@
+# 依赖与构建产物不进入构建上下文，保证镜像可复现、不夹带缓存
+node_modules/
+dist/
+dist-offline/
+.vite/
+.cache/
+
+# 版本控制与本地文件
+.git/
+*.log
+.DS_Store
+
+# Docker 相关文件无需进入上下文
+Dockerfile
+.dockerignore
+docker-compose.yml

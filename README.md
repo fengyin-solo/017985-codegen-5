@@ -15,11 +15,46 @@ docker-compose up --build -d
 docker-compose down
 ```
 
+## 离线单文件分发版
+
+为不方便联网的斫琴师提供完全自包含的离线版本：所有 JS/CSS 内联进单个 HTML 文件，
+**双击即可在浏览器中打开使用**，无需联网、无需安装任何依赖、无需启动服务器。
+
+### 方式一：Docker 导出（推荐，可复现）
+
+```bash
+docker build --target offline --output type=local,dest=./offline-package ./frontend-user
+```
+
+产物在 `offline-package/` 目录：
+- `index.html` —— 离线单文件应用（约 300KB，完全自包含）
+- `test-guqin.wav` —— 测试音频（可选，用于验证功能）
+
+将 `index.html` 拷贝到 U 盘/离线电脑，用浏览器直接打开即可。
+
+### 方式二：本地构建
+
+```bash
+cd frontend-user
+npm ci                  # 严格按锁文件安装，保证可复现
+npm run build:offline   # 产出 frontend-user/dist-offline/
+```
+
+### 可复现与纯净性保证
+
+- 所有依赖在 `package.json` 中固定为精确版本，并由 `package-lock.json` 锁定，`npm ci` 严格按锁文件安装
+- 构建产物仅含静态文件：`.dockerignore` 排除了 `node_modules/`、构建缓存与本地产物，
+  运行镜像（nginx）中不安装任何 npm 依赖，离线导出包基于 `scratch` 空镜像
+- 构建脚本内置环境检查与产物校验，失败时会输出明确原因（Node 版本、锁文件缺失、内联未生效等）
+
 ## Services
 
 | 服务名称 | 端口 | 描述 |
 |---------|------|------|
 | frontend-user | 8081 | 古琴音频分析软件用户端 |
+
+> 端口与访问入口保持一致：本地开发（`npm run dev`）、本地预览（`npm run preview`）
+> 与容器启动均为 **http://localhost:8081**；离线单文件版无需端口，直接打开 HTML 即可。
 
 ## 测试
 
@@ -101,11 +136,16 @@ docker-compose down
 │   │   ├── styles/         # 样式文件
 │   │   │   └── main.css    # 主样式
 │   │   └── main.js         # 入口文件
+│   ├── scripts/            # 构建脚本
+│   │   ├── check-env.mjs        # 构建前环境检查
+│   │   └── verify-offline.mjs   # 离线单文件产物校验
 │   ├── index.html          # HTML 模板
-│   ├── Dockerfile          # Docker 构建文件
+│   ├── Dockerfile          # Docker 构建文件（含离线包导出阶段）
+│   ├── .dockerignore       # 构建上下文排除（依赖/缓存/产物）
 │   ├── nginx.conf          # Nginx 配置
-│   ├── package.json        # 项目配置
-│   └── vite.config.js      # Vite 配置
+│   ├── package.json        # 项目配置（依赖固定为精确版本）
+│   ├── vite.config.js      # Vite 配置（Web 版）
+│   └── vite.config.offline.js  # Vite 配置（离线单文件版）
 ├── docker-compose.yml      # Docker Compose 配置
 ├── .gitignore              # Git 忽略文件
 └── README.md               # 项目说明
